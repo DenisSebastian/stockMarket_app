@@ -1,2 +1,4 @@
 legacy
-legacy/*
+legacy/*.py
+
+**/.DS_Store
