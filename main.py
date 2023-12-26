@@ -1,150 +1,195 @@
-
-from typing import Any, List, Optional, Union
 import flet as ft
-from flet_core.border import Border
-from flet_core.charts.chart_axis import ChartAxis
-from flet_core.charts.chart_grid_lines import ChartGridLines
-from flet_core.charts.line_chart_data import LineChartData
-from flet_core.control import OptionalNumber
-from flet_core.ref import Ref
-from flet_core.types import AnimationValue, OffsetValue, ResponsiveNumber, RotateValue, ScaleValue
-
+import time
 from stock_data import get_stockData
-import matplotlib
-import matplotlib.pyplot as plt
-from flet.matplotlib_chart import MatplotlibChart
-import mplcyberpunk
-plt.style.use("dark_background")
-matplotlib.use("svg")
+import pandas as pd
+
+sp500 = "VOO"
+meta = "META"
+google = "GOOG"
+start_date = "2023-01-01"
+end_date = "2023-12-01"  
 
 
 
-tracker_style: dict = {
-    "main":{
-        #"expand": True,
-        "bgcolor": "#17181d",
-        "border_radius": 10,
-        "width": 350, 
-    },
-    "title_symbol":{
-        "size": 20,
-        "color": "white54", 
-        "weight": "bold"
-    },
-    "box_symbol":{
-        "width": 200,
-        "color": "teal600" ,
+def get_Stock(symbol,start_date, end_date):
+    data = get_stockData(symbol, start_date, end_date)
+    data = data.reset_index()
+    data = data.reset_index()
+    cols_selected = ['index', 'Adj Close']
+    stock = data[cols_selected]
+    stock_tuplas = list(stock.to_records(index=False))
+    return stock_tuplas
 
-        
-    }
-}
-
-class Symbol(ft.Container):
-    def __init__(self) -> None:
-        super().__init__(**tracker_style.get("main"))      
-
-        self.title = ft.Text(value="Select a Symbol", 
-                             **tracker_style.get("title_symbol"))
-        
-        self.default = "META"
-        self.symbol_name = ft.TextField(label="Symbol", value=self.default,
-                                        **tracker_style.get("box_symbol"))
-
-        self.content = ft.Column(
-            horizontal_alignment="center", 
-            controls= [
-                ft.Divider(height=15, color="transparent"),
-                ft.Row(alignment="center", controls = [self.title]),
-                ft.Row(alignment="center", controls = [self.symbol_name]),
-                ft.Divider(height=15, color="transparent")
-            ])
-        
+META = get_Stock(meta, start_date, end_date)
+SP500 = get_Stock(sp500, start_date, end_date)
+GOOGLE = get_Stock(google, start_date, end_date)
 
 
 
-base_chart_style: dict ={
-    "expand": True,
-    "tooltip_bgcolor": ft.colors.with_opacity(0.8, ft.colors.WHITE),
-    "left_axis": ft.ChartAxis(labels=50),
-    "bottom_axis": ft.ChartAxis(labels_interval=1, labels_size=40),
-    "horizontal_grid_lines": ft.ChartGridLines(
-        interval=10, color=ft.colors.with_opacity(0.2, ft.colors.ON_SURFACE), width=1
-    ),
-}
+class RealTimeChart(ft.UserControl):
+    def __init__(self):
+        #
+        self.y_labels: list = []
+        self.data_points: list = []
+        self.points: list = META
+        self.name_stock= "in the Time" # modificaer mediante una fucnión
+        #
+        self.chart: ft.Control = ft.LineChart(
+            tooltip_bgcolor=ft.colors.with_opacity(0.8, ft.colors.WHITE),
+            min_y=int(min(self.points, key=lambda y: y[1])[1]),
+            max_y=int(max(self.points, key=lambda y: y[1])[1]),
+            min_x=int(min(self.points, key=lambda x: x[0])[0]),
+            max_x=int(max(self.points, key=lambda x: x[0])[0]),
+            expand=True,
+            left_axis=ft.ChartAxis(labels_size=50),
+            bottom_axis=ft.ChartAxis(labels_interval=1, labels_size=40),
+        )
+        #
+        self.line_chart: ft.Control = ft.LineChartData(
+            color=ft.colors.GREEN,
+            stroke_width=2,
+            curved=True,
+            stroke_cap_round=True,
+            below_line_gradient=ft.LinearGradient(
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center,
+                colors=[
+                    ft.colors.with_opacity(0.25, ft.colors.GREEN),
+                    "transparent",
+                ],
+            ),
+        )
 
+        super().__init__()
 
+    def create_data_point(self, x, y):
+        return ft.LineChartDataPoint(
+            x,
+            y,
+            selected_below_line=ft.ChartPointLine(
+                width=0.5, color="white54", dash_pattern=[2, 4]
+            ),
+            selected_point=ft.ChartCirclePoint(stroke_width=1),
+        )
 
-class BaseChart(ft.LineChart):
-    def __init__(self, _nSymbol: str) -> None:
-        super().__init__(**base_chart_style)
-        self._nSymbol: str = _nSymbol
+    def get_data_points(self):
+        for x, y in self.points:
+            self.data_points.append(self.create_data_point(x, y))
+            self.chart.update()
+            time.sleep(0.001)
 
-        self.start_date = "2022-01-01"
-        self.end_date = "2023-01-01"  
-       
-        data = get_stockData(self._nSymbol, self.start_date, self.end_date)
-        try:
-            if data.empty:
-                print(f"No hay datos para el símbolo {self._nSymbol} en el rango de fechas proporcionado.")
-                return
-        except Exception as e:
-            print(f"Error al obtener datos para el símbolo {self._nSymbol}: {e}")
-            return
-        
-        plt.figure(figsize=(10, 6))
-        plt.plot(data['Adj Close'], label=self._nSymbol)
-        plt.xlabel("Fecha")
-        plt.ylabel("Precio de Cierre Ajustado")
-        plt.title(f"Gráfico de Acciones: {self._nSymbol}")
-        plt.legend()
-        mplcyberpunk.add_gradient_fill(alpha_gradientglow=0.5)
-        return MatplotlibChart(plt, expand=True)
+    def test_click(self, e):
+        # switch the list
+        self.switch_list(e)
+        #
+        self.chart.data_series = [self.line_chart]
+        # get the new data points
+        self.get_data_points()
         
 
+    
+    def switch_list(self, e):
+        if e.control.data == "meta":
+            self.points = META
+        if e.control.data == "google":
+            self.points = GOOGLE
+        if e.control.data == "sp500":
+            self.points = SP500
+
+        self.data_points = []
+        self.chart.data_series = []
+        self.line_chart.data_points = self.data_points
+
+        self.chart.min_y = int(min(self.points, key=lambda y: y[1])[1])
+        self.chart.max_y = int(max(self.points, key=lambda y: y[1])[1])
+        self.chart.min_x = int(min(self.points, key=lambda x: x[0])[0])
+        self.chart.max_x = int(max(self.points, key=lambda x: x[0])[0])
+        self.chart.update()
+        time.sleep(0.5)
+    
+    # def getName(self):
+    #     if self.get_data_buttons.text == "meta":
+    #         self.name = "META"
+    #     if self.get_data_buttons.text == "google":
+    #         self.name = "GOOGLE"
+    #     if self.get_data_buttons.text == "sp500":
+    #         self.name = "SP500"
         
 
+    def get_data_buttons(self, btn_name, data):
+        return ft.ElevatedButton(
+            btn_name,
+            width=140,
+            height=40,
+            style=ft.ButtonStyle(
+                shape={"": ft.RoundedRectangleBorder(radius=6)},
+            ),
+            bgcolor="teal600",
+            color="black",
+            data=data,
+            on_click=lambda e: self.test_click(e),
+        )
+    
 
-graph_style: dict = {
-    "expand": 1,
-    "bgcolor": "#17181d",
-    "border_radius": 10,
-    "padding":30,
-}
-
-class Graph(ft.Container):
-    def __init__(self, symbol_object = object) -> None:
-        super().__init__(**graph_style)
-        symbol_instance = symbol_object
-        self.chart = BaseChart(_nSymbol=symbol_instance.symbol_name.value)
-        self.content = self.chart
-
-
+    def build(self):
+        self.line_chart.data_points = self.data_points
+        self.chart.data_series = [self.line_chart]
+        
+        return ft.Column(
+            horizontal_alignment="center",
+            controls=[
+                ft.Text(
+                    f"Stock Market of {self.name_stock}",
+                    size=16,
+                    weight="bold",
+                ),
+                self.chart,
+            ],
+        )
 
 
 def main(page: ft.Page):
-    page.padding = 30
-    page.bgcolor = "#1f2128"
-    
-    # stock data
-    #data = get_stockData(symbol_sel.value, start_date, end_date)
-    symbol_block: ft.Container = Symbol()
-    graph: ft.Container = Graph(symbol_object = Symbol())
-    
-        # graph
+    page.horizontal_alignment = "center"
+    page.vertical_alignment = "center"
 
-    
-
-    page.update()
-
-
+    chart = RealTimeChart()
     page.add(
-        ft.Row(
-            expand = True,
-            controls = [symbol_block, graph]
-                )
-            )
-    
+        ft.Column(
+            expand=True,
+            alignment="center",
+            horizontal_alignment="center",
+            controls=[
+                ft.Container(
+                    expand=1,
+                    border_radius=6,
+                    bgcolor=ft.colors.with_opacity(0.005, ft.colors.WHITE10),
+                    content=ft.Row(
+                        alignment="center",
+                        controls=[
+                            chart.get_data_buttons("META", "meta"),
+                            chart.get_data_buttons("GOOGLE", "google"), 
+                            chart.get_data_buttons("SP500", "sp500"),
+                        ],
+                    ),
+                ),
+                ft.Container(
+                    expand=4,
+                    content=chart,
+                    padding=20,
+                    border_radius=6,
+                    bgcolor=ft.colors.with_opacity(0.005, ft.colors.WHITE10),
+                ),
+                # ft.Container(
+                #     expand=2,
+                #     border_radius=6,
+                #     bgcolor=ft.colors.with_opacity(0.005, ft.colors.WHITE10),
+                # ),
+            ],
+        ),
+    )
+    page.update()
+    time.sleep(1)
+    chart.get_data_points()
 
-if __name__ == "__main__":
-    ft.app(target=main)
-#ft.app(target=main)
+
+ft.app(main)
