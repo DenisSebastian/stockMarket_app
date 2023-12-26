@@ -13,6 +13,8 @@ from stock_data import get_stockData
 import matplotlib
 import matplotlib.pyplot as plt
 from flet.matplotlib_chart import MatplotlibChart
+import mplcyberpunk
+plt.style.use("dark_background")
 matplotlib.use("svg")
 import time
 
@@ -26,46 +28,22 @@ base_chart_style: dict ={
     ),
 }
 
-POINTS = [
-    (0, 273.60),
-    (1, 279.00),
-    (2, 348.20),
-    (3, 363.70),
-    (4, 438.40),
-    (5, 518.90),
-    (6, 638.00),
-    (7, 833.75),
-    (8, 874.75),
-    (9, 1096.50),
-    (10, 1226.75),
-    (11, 1577.00),
-    (12, 1668.75),
-    (13, 1200.00),
-    (14, 1184.75),
-    (15, 1061.25),
-    (16, 1151.00),
-    (17, 1257.25),
-    (18, 1301.50),
-    (19, 1493.25),
-    (20, 1906.25),
-    (21, 1753.90),
-    (22, 1980.40),
-]
+
 
 class BaseChart(ft.LineChart):
     def __init__(self, line_color: str) -> None:
         super().__init__(**base_chart_style)
         
-        # create empty listo  to stores coordinates 
+        # create empty list to store coordinates 
         self.points: list = []
         
         # set the min and max X axis
-        self.min_x = (
-            int(min(self.points, key = lambda x: x[0][0])) if self.points else None
-        )
-        self.max_x = (
-            int(max(self.points, key = lambda x: x[0][0])) if self.points else None
-        )
+        if self.points:
+            self.min_x = int(min(self.points, key = lambda x: x[0][0]))
+            self.max_x = int(max(self.points, key = lambda x: x[0][0]))
+        else:
+            self.min_x = None
+            self.max_x = None
 
         # main line 
         self.line: Any = ft.LineChartData(
@@ -84,6 +62,7 @@ class BaseChart(ft.LineChart):
 
         self.line.data_points = self.points
         self.data_series = [self.line]
+        
 
     def create_data_points(self, x, y) -> None:
         self.points.append(
@@ -125,15 +104,16 @@ table_style: dict = {
             ft.DataColumn(ft.Text("Adj Close"), numeric=True),
             ft.DataColumn(ft.Text("Volume"), numeric=True),
         ],
-        "width": 800,
-        "heading_row_height": 50, 
-        "data_row_max_height": 30,        
+        #"width": 800,
+        "expand" : True,
+        #"heading_row_height": 50, 
+        #"data_row_max_height": 30,        
     },
     "data_table_container": {
         "expand" : True,
         #"width" : 450,
-        #"padding": 10,
-        #"border_radius": ft.border_radius.only(top_left=10, top_right=10),
+        "padding": 10,
+        "border_radius": ft.border_radius.only(top_left=10, top_right=10),
         "shadow": ft.BoxShadow(
             spread_radius=8, 
             blur_radius=15,
@@ -147,9 +127,9 @@ table_style: dict = {
 }
 
 class Table(ft.Container):
-    def __init__(self) -> None:
+    def __init__(self, _lgraph: object) -> None:
         super().__init__(**table_style.get("data_table_container"))
-
+        self._lgraph: object = _lgraph
         self.headTab = ft.DataTable(**table_style.get("data_table"))
         
         self.content = ft.Column(
@@ -164,7 +144,7 @@ class Table(ft.Container):
                                  )),
                 ft.Divider(height=15, color="transparent")
             ])
-        self.x = 0
+        
         #self.symbol = "META"
         #self.start_date = "2022-01-01"
         #self.end_date = "2023-01-01"  
@@ -173,26 +153,42 @@ class Table(ft.Container):
         #        data = get_stockData(self.symbol , self.start_date, self.end_date)
         #        return data
         
+        self.x = 10
+        self.y = 8
         #self.data = getData(self)
+        #self._lgraph.chart.create_data_points(x = self.x, y = self.y)        
 
         def update_data_table(self) ->  None:
             timestamp = int(time.time())
             data = ft.DataRow(
                 cells=ft.DataCell(ft.Text(timestamp))
             )
+
+            self.table.rows.append(data)
+            self.table.update
+            return timestamp
+        
+        
         
 
 
 tracker_style: dict = {
     "main":{
-        "expand": True,
+        #"expand": True,
         "bgcolor": "#17181d",
         "border_radius": 10,
+        "width": 350, 
     },
     "title_symbol":{
         "size": 20,
-        "color": ft.colors.AMBER, 
+        "color": "white54", 
         "weight": "bold"
+    },
+    "box_symbol":{
+        "width": 200,
+        "color": "teal600" ,
+
+        
     }
 }
 
@@ -204,10 +200,11 @@ class Symbol(ft.Container):
                              **tracker_style.get("title_symbol"))
         
         self.default = "META"
-        self.symbol_name = ft.TextField(label="Symbol", value=self.default)
+        self.symbol_name = ft.TextField(label="Symbol", value=self.default,
+                                        **tracker_style.get("box_symbol"))
 
         self.content = ft.Column(
-            horizontal_alignment="center", width="w200", 
+            horizontal_alignment="center", 
             controls= [
                 ft.Divider(height=15, color="transparent"),
                 ft.Row(alignment="center", controls = [self.title]),
@@ -234,18 +231,19 @@ def main(page: ft.Page):
     data = get_stockData(symbol_sel.value, start_date, end_date)
     graph: ft.Container = Graph()
     symbol_block: ft.Container = Symbol()
-    table: ft.Container = Table()
+    table: ft.Container = Table(_lgraph = graph)
 
 
 
     # graph
 
     plt.figure(figsize=(10, 6))
-    plt.plot(data['Adj Close'], label=symbol_sel)
+    plt.plot(data['Adj Close'], label=symbol_sel.value)
     plt.xlabel("Fecha")
     plt.ylabel("Precio de Cierre Ajustado")
-    plt.title(f"Gráfico de Acciones: {symbol_sel}")
+    plt.title(f"Gráfico de Acciones: {symbol_sel.value}")
     plt.legend()
+    mplcyberpunk.add_gradient_fill(alpha_gradientglow=0.5)
 
     page.update()
 
@@ -253,8 +251,10 @@ def main(page: ft.Page):
     page.add(
         ft.Row(
             expand = True,
-            controls = [symbol_block,   
-                        ft.Column(expand = True, controls = [MatplotlibChart(plt, expand=True), table])]))
+            controls = [symbol_block,  
+                        ft.Column(expand = True, controls = 
+                                  [MatplotlibChart(plt, expand=True), 
+                                   table])]))
     
 
 if __name__ == "__main__":
